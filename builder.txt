@@ -1,0 +1,119 @@
+import { useState, useRef } from 'react'
+import { Radio, RadioGroup } from '@sajari/react-components';
+import './App.css'
+
+function App() {
+  const [questions,setQuestions] = useState([]);
+  const [index,setIndex] = useState(1);
+  const incrementIndex = () => {setIndex(index+1);};
+  const [uploadDone,setUploadDone] = useState(false);
+  let uploaded = 0;
+  const incrementUploaded = () => {uploaded++;if(uploaded == questions.length) setUploadDone(true); }
+  
+  const newQuestionAction = (newQ) => { newQ.id = index;setQuestions([...questions,newQ]);incrementIndex();}
+  const removeQuestion = (n) => {setQuestions(questions.filter((q) => {return q.id != n}))}
+
+  // Helper functions to assist with the process of uploading the survey to the server.
+  function uploadSurvey(toPost) {
+    fetch('http://localhost:8085/surveys', {
+      method: 'POST',
+      body: JSON.stringify(toPost),
+      headers: {
+        'Content-type': 'application/json; charset=UTF-8'
+      }
+    }).then(response => response.json()).then(response => uploadQuestions(response));
+  }
+  function uploadQuestions(id) {
+    questions.map(q=>{q.survey = id;uploadQuestion(q);});
+  }
+  function uploadQuestion(q) {
+    fetch('http://localhost:8085/questions', {
+      method: 'POST',
+      body: JSON.stringify(q),
+      headers: {
+        'Content-type': 'application/json; charset=UTF-8'
+      }
+    }).then(response=>incrementUploaded());
+  }
+
+  if(uploadDone)
+    return (
+      <div>
+        <h1>Survey Uploaded</h1>
+        <p>Survey id is {questions[0].survey}.</p>
+      </div>
+    )
+  else
+    return (
+      <div>
+        <>
+        {questions.map((e)=>{return (<Remover key={e.id} id={e.id} doRemove={removeQuestion}><QuestionPreview prompt={e.question} choices={e.responses} /></Remover>)})}
+        </>
+        <hr />
+        <QuestionMaker handleNew={newQuestionAction} />
+        <hr />
+        <SurveyPoster handlePost={uploadSurvey}/>
+      </div>
+    )
+}
+
+function Remover({id,children,doRemove}) {
+  const action = () => doRemove(id);
+  return (
+    <>
+    {children}
+    <button onClick={action}>Remove</button>
+    </>
+  )
+}
+
+function QuestionPreview({prompt,choices}) {
+  if(choices=='') {
+    return (
+      <div>
+        <p>{prompt}</p>
+        <input type="text"/>
+      </div>
+    )
+  } else {
+    const options = choices.split(',');
+    return (
+      <div>
+        <p>{prompt}</p>
+        <RadioGroup inline defaultValue={options[0]}>
+        {options.map((o) => {return(<Radio key={o} value={o}>{o}</Radio>)})}
+        </RadioGroup>
+      </div>
+    )
+  }
+}
+
+function QuestionMaker({handleNew}) {
+  let promptInput = useRef();
+  let choicesInput = useRef();
+
+  const action = (e) => { handleNew({question:promptInput.current.value,responses:choicesInput.current.value}); }
+  return (
+    <div>
+      <p>Question prompt: <input type="text" ref={promptInput} /></p>
+      <p>Question choices: <input type="text" ref={choicesInput} /></p>
+      <p><button onClick={action}>Add Question</button></p>
+    </div>
+  )
+}
+
+function SurveyPoster({handlePost}) {
+  let titleInput = useRef();
+  let promptInput = useRef();
+  
+  const action = (e) => { handlePost({title:titleInput.current.value,prompt:promptInput.current.value}); }
+  return (
+    <div>
+      <p>Survey Title: <input type="text" ref={titleInput} /></p>
+      <p>Survey Prompt: <input type="text" ref={promptInput} /></p>
+      <p><button onClick={action}>Upload Survey</button></p>
+    </div>
+  )
+}
+
+export default App
